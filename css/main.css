@@ -161,12 +161,6 @@ a:hover {
     text-decoration: underline;
 }
 
-/* Tooltip for coded values */
-.coded-value {
-    cursor: help;
-    border-bottom: 1px dotted var(--text-secondary);
-}
-
 .nav-toggle {
     display: none;
     background: none;

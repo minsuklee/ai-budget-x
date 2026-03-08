@@ -112,10 +112,24 @@ var Utils = {
     codedValue: function(code) {
         if (!code) return '';
         var label = this.getCodeLabel(code);
-        var display = this.escapeHtml(code);
-        if (label && label !== code) {
-            return '<span class="coded-value" title="' + this.escapeHtml(label) + '">' + display + '</span>';
+        var shortCode = code;
+        var dashIdx = code.indexOf('-');
+        if (dashIdx > 0) shortCode = code.substring(0, dashIdx);
+        if (label && label !== code && label !== shortCode) {
+            return this.escapeHtml(shortCode) + ' <span style="color:var(--text-secondary);">(' + this.escapeHtml(label) + ')</span>';
         }
-        return display;
+        return this.escapeHtml(code);
+    },
+
+    codedLabel: function(code) {
+        if (!code) return '';
+        var label = this.getCodeLabel(code);
+        var shortCode = code;
+        var dashIdx = code.indexOf('-');
+        if (dashIdx > 0) shortCode = code.substring(0, dashIdx);
+        if (label && label !== code && label !== shortCode) {
+            return shortCode + ' (' + label + ')';
+        }
+        return code;
     }
 };

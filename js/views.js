@@ -361,7 +361,7 @@ var Views = {
         if (stats.by_domain && stats.by_domain.length > 0) {
             var domItems = stats.by_domain.map(function(d) {
                 return {
-                    label: d.domain,
+                    label: Utils.codedLabel(d.domain),
                     value: d.pair_count + '쌍',
                     extra: Utils.formatBudget(d.total_budget)
                 };
@@ -371,13 +371,36 @@ var Views = {
 
         // Methodology
         html += '<div class="card" style="margin-top:var(--space-md);">';
-        html += '<div class="card-header"><h2>분석 방법론</h2></div>';
-        html += '<p style="font-size:var(--font-size-sm);line-height:1.8;">' + Utils.escapeHtml(meta.methodology || '') + '</p>';
-        if (meta.formula) {
-            html += '<div style="margin-top:var(--space-md);padding:var(--space-md);background:var(--bg-gray);border-radius:var(--radius-sm);font-family:monospace;font-size:var(--font-size-sm);">';
-            html += Utils.escapeHtml(meta.formula);
-            html += '</div>';
-        }
+        html += '<div class="card-header"><h2>분석 방법론 <a href="https://github.com/minsuklee/ai-budget-x/blob/main/methodology.md" target="_blank" rel="noopener" style="font-size:var(--font-size-sm);font-weight:400;">[분석 방법론 문서]</a></h2></div>';
+        html += '<div style="font-size:var(--font-size-sm);line-height:1.8;">';
+        html += '<p>인력양성(T04/T05) 사업 전용 유사도 분석으로, 세부(내역)사업 수준에서 사업 간 유사성/중복성을 체계적으로 분석합니다.</p>';
+        html += '<h4 style="margin-top:var(--space-md);margin-bottom:var(--space-xs);">분석 차원 및 가중치</h4>';
+        html += '<table class="sub-table" style="margin-bottom:var(--space-md);">';
+        html += '<thead><tr><th>차원</th><th>가중치</th><th>설명</th></tr></thead><tbody>';
+        html += '<tr><td>F (교육분야)</td><td>35%</td><td>인력양성 타겟 분야(F01~F15) 일치 여부. Overlap coefficient 적용</td></tr>';
+        html += '<tr><td>C (수혜대상)</td><td>25%</td><td>수혜자 그룹(B01~B10) 일치 여부. Jaccard 유사도 적용</td></tr>';
+        html += '<tr><td>E (텍스트)</td><td>20%</td><td>이원화 TF-IDF: 도메인 키워드(40%) + 교육구조 키워드(60%)</td></tr>';
+        html += '<tr><td>D (수행기관)</td><td>10%</td><td>수행기관 유형(A01~A04) 일치 여부</td></tr>';
+        html += '<tr><td>B (사업형태)</td><td>곱셈 게이트</td><td>T04-T04/T05-T05=1.0, T04-T05 교차=0.8</td></tr>';
+        html += '</tbody></table>';
+        html += '<h4 style="margin-bottom:var(--space-xs);">점수 산출 공식</h4>';
+        html += '<div style="padding:var(--space-sm) var(--space-md);background:var(--bg-gray);border-radius:var(--radius-sm);font-family:monospace;margin-bottom:var(--space-md);">';
+        html += 'raw_score = (F&times;0.35 + C&times;0.25 + D&times;0.10 + E&times;0.20) &times; B &times; 10 &nbsp; (+2 보너스 if E&ge;0.8)';
+        html += '</div>';
+        html += '<h4 style="margin-bottom:var(--space-xs);">필수 게이트 조건</h4>';
+        html += '<ul style="padding-left:var(--space-lg);margin-bottom:var(--space-md);">';
+        html += '<li>양 사업 모두 인력양성 타입(T04/T05/T98)이어야 함</li>';
+        html += '<li>사업 형태 게이트: B &ge; 0.8</li>';
+        html += '<li>타겟 분야 게이트: F &gt; 0.0 (교육분야가 하나라도 겹쳐야 함)</li>';
+        html += '<li>종합 점수 하한: raw_score &ge; 5.0</li>';
+        html += '</ul>';
+        html += '<h4 style="margin-bottom:var(--space-xs);">점수 체계</h4>';
+        html += '<ul style="padding-left:var(--space-lg);">';
+        html += '<li><strong>9~10점</strong>: 거의 중복 — 타겟 분야, 수혜 대상, 기관 형태 모두 동일, 부처만 다름</li>';
+        html += '<li><strong>7~8점</strong>: 높은 유사성 — 타겟 분야 유사, 수혜 대상 유사</li>';
+        html += '<li><strong>5~6점</strong>: 중간 유사성 — 타겟 분야 일부 겹침, 수혜 대상 일부 겹침</li>';
+        html += '</ul>';
+        html += '</div>';
         html += '</div>';
 
         el.innerHTML = html;

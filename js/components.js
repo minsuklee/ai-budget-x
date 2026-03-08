@@ -129,16 +129,6 @@ var Components = {
             html += '</div>';
         }
 
-        // Gates
-        html += '<div class="dimension-row" style="margin-top:var(--space-sm);padding-top:var(--space-sm);border-top:1px solid var(--border);">';
-        html += '<div style="font-size:var(--font-size-xs);color:var(--text-secondary);">';
-        html += 'Domain Gate: ' + (analysis.domain_gate ? 'Pass' : 'Fail');
-        html += ' | Type Gate (B): ' + analysis.type_gate;
-        if (analysis.text_similarity && analysis.text_similarity.text_bonus !== undefined) {
-            html += ' | Text Bonus: ' + analysis.text_similarity.text_bonus;
-        }
-        html += '</div></div>';
-
         html += '</div>';
         return html;
     },
