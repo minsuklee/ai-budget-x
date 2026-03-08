@@ -9,84 +9,29 @@ var Components = {
         return html;
     },
 
-    programTable: function(programs, currentSort) {
-        if (!currentSort) currentSort = {};
-        var columns = [
-            { field: 'program_name', label: '사업명', cls: '' },
-            { field: 'ministry', label: '소관부처', cls: '' },
-            { field: 'budget_2026_million_won', label: '2026 예산', cls: 'text-right' },
-            { field: 'budget_change_rate', label: '증감률', cls: 'text-right' },
-            { field: 'target_groups', label: '주요 대상', cls: 'col-hide-tablet' },
-            { field: '_overlap_count', label: '중복', cls: 'text-center' }
-        ];
-
-        var html = '<div class="table-wrapper"><table class="data-table mobile-cards">';
-        html += '<thead><tr>';
-        for (var c = 0; c < columns.length; c++) {
-            var col = columns[c];
-            var arrow = '\u2195';
-            var arrowCls = '';
-            if (currentSort.field === col.field) {
-                arrow = currentSort.dir === 'asc' ? '\u25B2' : '\u25BC';
-                arrowCls = ' active';
-            }
-            html += '<th class="' + col.cls + '" data-sort-field="' + col.field + '">';
-            html += Utils.escapeHtml(col.label);
-            if (col.field !== 'target_groups') {
-                html += ' <span class="sort-arrow' + arrowCls + '">' + arrow + '</span>';
-            }
-            html += '</th>';
-        }
-        html += '</tr></thead><tbody>';
-
-        for (var i = 0; i < programs.length; i++) {
-            var p = programs[i];
-            var overlapCount = DataStore.getOverlapCount(p.program_id);
-            var targets = (p.target_groups || []).slice(0, 2).join(', ');
-            if ((p.target_groups || []).length > 2) targets += ' 외';
-
-            html += '<tr data-program-id="' + Utils.escapeHtml(p.program_id) + '">';
-            html += '<td data-label="사업명"><strong>' + Utils.escapeHtml(p.program_name) + '</strong></td>';
-            html += '<td data-label="소관부처"><span class="badge badge-ministry">' + Utils.escapeHtml(p.ministry) + '</span></td>';
-            html += '<td data-label="2026 예산" class="text-right">' + Utils.formatBudget(p.budget_2026_million_won) + '</td>';
-            html += '<td data-label="증감률" class="text-right">' + Utils.formatChangeRate(p.budget_change_rate) + '</td>';
-            html += '<td data-label="주요 대상" class="col-hide-tablet">' + Utils.escapeHtml(targets) + '</td>';
-            html += '<td data-label="중복관계" class="text-center">';
-            if (overlapCount > 0) {
-                html += '<span class="badge badge-overlap">' + overlapCount + '건</span>';
-            } else {
-                html += '-';
-            }
-            html += '</td>';
-            html += '</tr>';
-        }
-
-        if (programs.length === 0) {
-            html += '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-secondary);">검색 결과가 없습니다.</td></tr>';
-        }
-
-        html += '</tbody></table></div>';
-        return html;
+    scoreBar: function(score, max) {
+        if (!max) max = 10;
+        var pct = Math.round((score / max) * 100);
+        var color = Utils.getScoreColor(score);
+        return '<div class="score-bar">' +
+            '<div class="score-fill" style="width:' + pct + '%;background:' + color + '"></div>' +
+            '<span class="score-label">' + Utils.formatScore(score) + '</span>' +
+            '</div>';
     },
 
-    overlapTable: function(overlaps, currentSort) {
+    subScoreBar: function(score) {
+        var pct = Math.round(score * 100);
+        var color = Utils.getSubScoreColor(score);
+        return '<div class="score-bar">' +
+            '<div class="score-fill" style="width:' + pct + '%;background:' + color + '"></div>' +
+            '<span class="score-label">' + Utils.formatScorePercent(score) + '</span>' +
+            '</div>';
+    },
+
+    pairTable: function(pairs, currentSort) {
         if (!currentSort) currentSort = {};
-        var dimensionLabels = {
-            target_group: '대상',
-            content: '내용',
-            executing_agency: '기관',
-            region: '지역'
-        };
-
-        var html = '<div class="table-wrapper"><table class="data-table mobile-cards">';
-        html += '<thead><tr>';
-        html += '<th data-sort-field="program_a_name">사업 A</th>';
-        html += '<th data-sort-field="program_b_name">사업 B</th>';
-        html += '<th data-sort-field="overlap_type" class="col-hide-tablet">중복유형</th>';
-
         var sortArrow = function(field) {
-            var arrow = '\u2195';
-            var cls = '';
+            var arrow = '\u2195', cls = '';
             if (currentSort.field === field) {
                 arrow = currentSort.dir === 'asc' ? '\u25B2' : '\u25BC';
                 cls = ' active';
@@ -94,197 +39,146 @@ var Components = {
             return ' <span class="sort-arrow' + cls + '">' + arrow + '</span>';
         };
 
-        html = '<div class="table-wrapper"><table class="data-table mobile-cards">';
+        var html = '<div class="table-wrapper"><table class="data-table mobile-cards">';
         html += '<thead><tr>';
-        html += '<th data-sort-field="program_a_name">사업 A' + sortArrow('program_a_name') + '</th>';
-        html += '<th data-sort-field="program_b_name">사업 B' + sortArrow('program_b_name') + '</th>';
-        html += '<th data-sort-field="overlap_type" class="col-hide-tablet">중복유형' + sortArrow('overlap_type') + '</th>';
-        html += '<th data-sort-field="overlap_score" class="text-center">종합점수' + sortArrow('overlap_score') + '</th>';
-
-        var dims = ['target_group', 'content', 'executing_agency', 'region'];
-        for (var d = 0; d < dims.length; d++) {
-            html += '<th class="text-center col-hide-tablet">' + dimensionLabels[dims[d]] + '</th>';
-        }
+        html += '<th data-sort-field="project_a_name">사업A (세부사업)' + sortArrow('project_a_name') + '</th>';
+        html += '<th data-sort-field="dept_a">부처' + sortArrow('dept_a') + '</th>';
+        html += '<th data-sort-field="project_b_name">사업B (세부사업)' + sortArrow('project_b_name') + '</th>';
+        html += '<th class="col-hide-tablet">부처B</th>';
+        html += '<th data-sort-field="similarity_score" class="text-center">유사도' + sortArrow('similarity_score') + '</th>';
+        html += '<th data-sort-field="budget_sum" class="text-right col-hide-tablet">합산예산' + sortArrow('budget_sum') + '</th>';
         html += '</tr></thead><tbody>';
 
-        for (var i = 0; i < overlaps.length; i++) {
-            var o = overlaps[i];
-            var pA = DataStore.getProgram(o.program_a);
-            var pB = DataStore.getProgram(o.program_b);
-            var nameA = pA ? pA.program_name : o.program_a;
-            var nameB = pB ? pB.program_name : o.program_b;
-
-            html += '<tr data-overlap-id="' + Utils.escapeHtml(o.overlap_id) + '">';
-            html += '<td data-label="사업 A">' + Utils.escapeHtml(nameA) + '</td>';
-            html += '<td data-label="사업 B">' + Utils.escapeHtml(nameB) + '</td>';
-            html += '<td data-label="중복유형" class="col-hide-tablet"><span class="badge badge-overlap">' + Utils.escapeHtml(o.overlap_type) + '</span></td>';
-            html += '<td data-label="종합점수" class="text-center">' + Components.scoreBar(o.overlap_score) + '</td>';
-
-            for (var d2 = 0; d2 < dims.length; d2++) {
-                var dimData = o.overlap_dimensions[dims[d2]];
-                var score = dimData ? dimData.score : 0;
-                html += '<td data-label="' + dimensionLabels[dims[d2]] + '" class="text-center col-hide-tablet">';
-                html += '<span class="score-cell ' + Utils.getScoreClass(score) + '">' + Utils.formatScore(score) + '</span>';
-                html += '</td>';
-            }
-
+        for (var i = 0; i < pairs.length; i++) {
+            var p = pairs[i];
+            var budgetSum = (p.project_a.budget_2026 || 0) + (p.project_b.budget_2026 || 0);
+            html += '<tr data-pair-id="' + Utils.escapeHtml(p.pair_id) + '">';
+            html += '<td data-label="사업A"><strong>' + Utils.escapeHtml(p.project_a.sub_project_name) + '</strong>';
+            html += '<div style="font-size:var(--font-size-xs);color:var(--text-secondary);">' + Utils.escapeHtml(p.project_a.project_name) + '</div></td>';
+            html += '<td data-label="부처A"><span class="badge badge-ministry">' + Utils.escapeHtml(p.project_a.department) + '</span></td>';
+            html += '<td data-label="사업B"><strong>' + Utils.escapeHtml(p.project_b.sub_project_name) + '</strong>';
+            html += '<div style="font-size:var(--font-size-xs);color:var(--text-secondary);">' + Utils.escapeHtml(p.project_b.project_name) + '</div></td>';
+            html += '<td data-label="부처B" class="col-hide-tablet"><span class="badge badge-ministry">' + Utils.escapeHtml(p.project_b.department) + '</span></td>';
+            html += '<td data-label="유사도" class="text-center">' + Components.scoreBar(p.similarity_score) + '</td>';
+            html += '<td data-label="합산예산" class="text-right col-hide-tablet">' + Utils.formatBudget(budgetSum) + '</td>';
             html += '</tr>';
         }
 
-        if (overlaps.length === 0) {
-            html += '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-secondary);">조건에 맞는 중복관계가 없습니다.</td></tr>';
+        if (pairs.length === 0) {
+            html += '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-secondary);">검색 결과가 없습니다.</td></tr>';
         }
-
         html += '</tbody></table></div>';
         return html;
     },
 
-    scoreBar: function(score) {
-        var pct = Math.round(score * 100);
-        var color = Utils.getScoreColor(score);
-        return '<div class="score-bar">' +
-            '<div class="score-fill" style="width:' + pct + '%;background:' + color + '"></div>' +
-            '<span class="score-label">' + pct + '%</span>' +
-            '</div>';
+    projectCard: function(proj) {
+        if (!proj) return '';
+        var html = '<div class="card">';
+        html += '<div class="card-header"><h3>' + Utils.escapeHtml(proj.sub_project_name) + '</h3>';
+        html += '<div style="font-size:var(--font-size-sm);color:var(--text-secondary);">' + Utils.escapeHtml(proj.project_name) + '</div></div>';
+        html += '<div class="info-grid">';
+        html += '<div class="info-item"><span class="info-label">부처</span><span class="info-value">' + Utils.escapeHtml(proj.department) + '</span></div>';
+        if (proj.division) html += '<div class="info-item"><span class="info-label">실/국</span><span class="info-value">' + Utils.escapeHtml(proj.division) + '</span></div>';
+        html += '<div class="info-item"><span class="info-label">2026 예산</span><span class="info-value">' + Utils.formatBudgetDetail(proj.budget_2026) + '</span></div>';
+        if (proj.type) html += '<div class="info-item"><span class="info-label">유형</span><span class="info-value">' + Utils.escapeHtml(proj.type) + '</span></div>';
+        if (proj.primary_domain) html += '<div class="info-item"><span class="info-label">도메인</span><span class="info-value">' + Utils.escapeHtml(proj.primary_domain) + '</span></div>';
+        if (proj.target_fields && proj.target_fields.length > 0) {
+            html += '<div class="info-item"><span class="info-label">대상분야</span><span class="info-value">' + proj.target_fields.map(function(f){ return Utils.escapeHtml(f); }).join(', ') + '</span></div>';
+        }
+        html += '</div>';
+        html += '</div>';
+        return html;
     },
 
-    dimensionBreakdown: function(dimensions) {
-        var labels = {
-            target_group: '대상 중복',
-            content: '내용 중복',
-            executing_agency: '수행기관 중복',
-            region: '지역 중복'
-        };
-        var keys = ['target_group', 'content', 'executing_agency', 'region'];
+    analysisBreakdown: function(analysis) {
+        if (!analysis) return '';
         var html = '<div class="dimension-list">';
-        for (var i = 0; i < keys.length; i++) {
-            var key = keys[i];
-            var dim = dimensions[key];
-            if (!dim) continue;
+
+        // Target Field Similarity
+        if (analysis.target_field_similarity) {
             html += '<div class="dimension-row">';
-            html += '<div class="dimension-header">';
-            html += '<span class="dimension-label">' + labels[key] + '</span>';
-            html += '<div class="dimension-bar">' + Components.scoreBar(dim.score) + '</div>';
+            html += '<div class="dimension-header"><span class="dimension-label">교육분야 유사도 (F)</span>';
+            html += '<div class="dimension-bar">' + Components.subScoreBar(analysis.target_field_similarity.score) + '</div></div>';
             html += '</div>';
-            if (dim.detail) {
-                html += '<div class="dimension-detail">' + Utils.escapeHtml(dim.detail) + '</div>';
+        }
+
+        // Beneficiary Similarity
+        if (analysis.beneficiary_similarity) {
+            html += '<div class="dimension-row">';
+            html += '<div class="dimension-header"><span class="dimension-label">수혜대상 유사도 (C)</span>';
+            html += '<div class="dimension-bar">' + Components.subScoreBar(analysis.beneficiary_similarity.score) + '</div></div>';
+            html += '</div>';
+        }
+
+        // Agency Similarity
+        if (analysis.agency_similarity) {
+            html += '<div class="dimension-row">';
+            html += '<div class="dimension-header"><span class="dimension-label">수행기관 유사도 (D)</span>';
+            html += '<div class="dimension-bar">' + Components.subScoreBar(analysis.agency_similarity.score) + '</div></div>';
+            html += '</div>';
+        }
+
+        // Text Similarity
+        if (analysis.text_similarity) {
+            html += '<div class="dimension-row">';
+            html += '<div class="dimension-header"><span class="dimension-label">텍스트 유사도 (E)</span>';
+            html += '<div class="dimension-bar">' + Components.subScoreBar(analysis.text_similarity.score) + '</div></div>';
+            if (analysis.text_similarity.domain_tfidf !== undefined) {
+                html += '<div class="dimension-detail">도메인 TF-IDF: ' + (analysis.text_similarity.domain_tfidf * 100).toFixed(0) + '% | 교육구조 TF-IDF: ' + (analysis.text_similarity.structure_tfidf * 100).toFixed(0) + '%</div>';
             }
             html += '</div>';
         }
+
+        // Gates
+        html += '<div class="dimension-row" style="margin-top:var(--space-sm);padding-top:var(--space-sm);border-top:1px solid var(--border);">';
+        html += '<div style="font-size:var(--font-size-xs);color:var(--text-secondary);">';
+        html += 'Domain Gate: ' + (analysis.domain_gate ? 'Pass' : 'Fail');
+        html += ' | Type Gate (B): ' + analysis.type_gate;
+        if (analysis.text_similarity && analysis.text_similarity.text_bonus !== undefined) {
+            html += ' | Text Bonus: ' + analysis.text_similarity.text_bonus;
+        }
+        html += '</div></div>';
+
         html += '</div>';
         return html;
     },
 
-    tagBadges: function(tags, cssClass) {
-        if (!cssClass) cssClass = 'badge-domain';
-        if (!tags || tags.length === 0) return '';
-        var html = '<div class="tag-group">';
-        for (var i = 0; i < tags.length; i++) {
-            html += '<span class="badge ' + cssClass + '">' + Utils.escapeHtml(tags[i]) + '</span>';
+    clusterCard: function(cluster) {
+        if (!cluster) return '';
+        var html = '<div class="card overlap-card" data-cluster-id="' + Utils.escapeHtml(cluster.cluster_id) + '">';
+        html += '<div class="overlap-card-info" style="flex:1;">';
+        html += '<div class="overlap-card-name">' + Utils.escapeHtml(cluster.cluster_name) + '</div>';
+        html += '<div style="display:flex;gap:var(--space-md);flex-wrap:wrap;margin-top:var(--space-xs);font-size:var(--font-size-xs);color:var(--text-secondary);">';
+        html += '<span>' + cluster.member_count + '개 세부사업</span>';
+        html += '<span>' + Utils.formatBudget(cluster.total_budget_2026) + '</span>';
+        html += '<span>평균 유사도: ' + Utils.formatScore(cluster.score_stats.avg) + '</span>';
+        html += '</div>';
+        html += '<div style="margin-top:var(--space-xs);">';
+        for (var d = 0; d < (cluster.departments || []).length; d++) {
+            html += '<span class="badge badge-ministry">' + Utils.escapeHtml(cluster.departments[d]) + '</span> ';
         }
         html += '</div>';
-        return html;
-    },
-
-    budgetCard: function(budget2026, budget2025, changeRate) {
-        var html = '<div class="budget-display">';
-        html += '<span class="budget-main">' + Utils.formatBudget(budget2026) + '</span>';
-        html += '<span class="budget-sub">2026년 예산</span>';
-        if (budget2025 !== null && budget2025 !== undefined) {
-            html += '<span class="budget-sub">(전년 ' + Utils.formatBudget(budget2025) + ', ' + Utils.formatChangeRate(changeRate) + ')</span>';
-        }
+        html += '</div>';
+        html += '<div class="overlap-card-score" style="min-width:80px;">' + Components.scoreBar(cluster.score_stats.max) + '</div>';
         html += '</div>';
         return html;
     },
 
-    subProgramTable: function(subPrograms) {
-        if (!subPrograms || subPrograms.length === 0) return '<p class="empty-state">내역사업 없음</p>';
-        var html = '<table class="sub-table">';
-        html += '<thead><tr><th>내역사업명</th><th style="text-align:right;">2026 예산</th><th>설명</th></tr></thead>';
-        html += '<tbody>';
-        for (var i = 0; i < subPrograms.length; i++) {
-            var sp = subPrograms[i];
-            html += '<tr>';
-            html += '<td><strong>' + Utils.escapeHtml(sp.name) + '</strong></td>';
-            html += '<td style="text-align:right;white-space:nowrap;">' + Utils.formatBudgetDetail(sp.budget_2026) + '</td>';
-            html += '<td>' + Utils.escapeHtml(sp.description) + '</td>';
+    statsCard: function(title, items, labelKey, valueKey, extraKey) {
+        var html = '<div class="card">';
+        html += '<div class="card-header"><h3>' + Utils.escapeHtml(title) + '</h3></div>';
+        html += '<table class="sub-table"><thead><tr>';
+        html += '<th>' + Utils.escapeHtml(labelKey || '항목') + '</th>';
+        html += '<th class="text-right">' + Utils.escapeHtml(valueKey || '값') + '</th>';
+        if (extraKey) html += '<th class="text-right">' + Utils.escapeHtml(extraKey) + '</th>';
+        html += '</tr></thead><tbody>';
+        for (var i = 0; i < items.length; i++) {
+            html += '<tr><td>' + Utils.escapeHtml(String(items[i].label)) + '</td>';
+            html += '<td class="text-right"><strong>' + Utils.escapeHtml(String(items[i].value)) + '</strong></td>';
+            if (extraKey) html += '<td class="text-right">' + Utils.escapeHtml(String(items[i].extra || '')) + '</td>';
             html += '</tr>';
         }
-        html += '</tbody></table>';
-        return html;
-    },
-
-    agencyList: function(agencies) {
-        if (!agencies || agencies.length === 0) return '<p>-</p>';
-        var html = '<ul class="simple-list">';
-        for (var i = 0; i < agencies.length; i++) {
-            var a = agencies[i];
-            html += '<li><strong>' + Utils.escapeHtml(a.name) + '</strong>';
-            if (a.role) html += ' &mdash; ' + Utils.escapeHtml(a.role);
-            html += '</li>';
-        }
-        html += '</ul>';
-        return html;
-    },
-
-    programSummaryCard: function(program) {
-        if (!program) return '';
-        var html = '<div class="card">';
-        html += '<div class="card-header"><h3>' + Utils.escapeHtml(program.program_name) + '</h3></div>';
-        html += '<div class="info-grid">';
-        html += '<div class="info-item"><span class="info-label">부처</span><span class="info-value">' + Utils.escapeHtml(program.ministry) + '</span></div>';
-        html += '<div class="info-item"><span class="info-label">담당부서</span><span class="info-value">' + Utils.escapeHtml(program.department) + '</span></div>';
-        html += '<div class="info-item"><span class="info-label">2026 예산</span><span class="info-value">' + Utils.formatBudget(program.budget_2026_million_won) + '</span></div>';
-        html += '<div class="info-item"><span class="info-label">재원</span><span class="info-value">' + Utils.escapeHtml(program.fund_source) + '</span></div>';
-        html += '</div>';
-        html += Components.tagBadges(program.domain_tags);
-        html += '</div>';
-        return html;
-    },
-
-    contactCard: function(contact) {
-        if (!contact) return '';
-        var html = '<div class="contact-card">';
-        html += '<div><strong>담당부서:</strong> ' + Utils.escapeHtml(contact.department) + '</div>';
-        if (contact.phone) {
-            html += '<div><strong>전화:</strong> ' + Utils.escapeHtml(contact.phone) + '</div>';
-        }
-        html += '</div>';
-        return html;
-    },
-
-    coordinationContacts: function(contacts) {
-        if (!contacts || contacts.length === 0) return '';
-        var html = '<div class="section"><h3 class="section-title">조율 연락처</h3>';
-        for (var i = 0; i < contacts.length; i++) {
-            var c = contacts[i];
-            html += '<div class="contact-card" style="margin-bottom:8px;">';
-            html += '<div><strong>' + Utils.escapeHtml(c.ministry) + '</strong></div>';
-            html += '<div>' + Utils.escapeHtml(c.department) + '</div>';
-            html += '<div style="color:var(--text-secondary);font-size:var(--font-size-xs);">' + Utils.escapeHtml(c.topic) + '</div>';
-            html += '</div>';
-        }
-        html += '</div>';
-        return html;
-    },
-
-    overlapCardList: function(overlaps, currentProgramId) {
-        if (!overlaps || overlaps.length === 0) return '<p class="empty-state">중복관계 없음</p>';
-        var html = '<div class="overlap-list">';
-        for (var i = 0; i < overlaps.length; i++) {
-            var o = overlaps[i];
-            var partnerId = o.program_a === currentProgramId ? o.program_b : o.program_a;
-            var partner = DataStore.getProgram(partnerId);
-            var partnerName = partner ? partner.program_name : partnerId;
-            html += '<div class="overlap-card" data-overlap-id="' + Utils.escapeHtml(o.overlap_id) + '">';
-            html += '<div class="overlap-card-info">';
-            html += '<div class="overlap-card-name">' + Utils.escapeHtml(partnerName) + '</div>';
-            html += '<div class="overlap-card-type">' + Utils.escapeHtml(o.overlap_type) + '</div>';
-            html += '</div>';
-            html += '<div class="overlap-card-score">' + Components.scoreBar(o.overlap_score) + '</div>';
-            html += '</div>';
-        }
-        html += '</div>';
+        html += '</tbody></table></div>';
         return html;
     }
 };

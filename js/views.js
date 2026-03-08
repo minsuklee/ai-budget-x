@@ -1,489 +1,383 @@
 var Views = {
     _state: {
         search: '',
-        filters: { ministry: '', domain_tag: '', budget_sector: '' },
-        sort: { field: 'budget_2026_million_won', dir: 'desc' },
-        overlapSort: { field: 'overlap_score', dir: 'desc' },
-        overlapMinScore: 0
+        filters: { department: '', minScore: 0 },
+        sort: { field: 'similarity_score', dir: 'desc' }
     },
 
-    container: function() {
-        return document.getElementById('app-content');
-    },
+    container: function() { return document.getElementById('app-content'); },
 
-    // ========== Program List View ==========
-    renderProgramList: function() {
+    // ========== Pair List (유사도 쌍 목록) ==========
+    renderPairList: function() {
         var el = this.container();
         var filters = DataStore.getFilterOptions();
+        var meta = DataStore.getMeta();
 
         var html = '<div class="view-header">';
-        html += '<h1>예산사업 목록</h1>';
-        html += '<p>정부 예산사업의 현황과 중복 관계를 확인합니다.</p>';
+        html += '<h1>유사 사업 쌍 분석</h1>';
+        html += '<p>총 ' + (meta.total_pairs_found || 0) + '건의 유사 사업 쌍이 발견되었습니다. (분석 대상: ' + (meta.total_sub_projects_analyzed || 0) + '개 세부사업)</p>';
         html += '</div>';
 
         html += '<div class="search-bar">';
-        html += '<input type="text" id="search-input" placeholder="사업명, 부처, 대상, 키워드로 검색..." value="' + Utils.escapeHtml(this._state.search) + '">';
+        html += '<input type="text" id="search-input" placeholder="사업명, 세부사업명, 부처, 실/국으로 검색..." value="' + Utils.escapeHtml(this._state.search) + '">';
         html += '</div>';
 
         html += '<div class="filter-row">';
-        html += Components.filterSelect('filter-ministry', '소관부처', filters.ministries);
-        html += Components.filterSelect('filter-domain', '분야태그', filters.domain_tags);
-        html += Components.filterSelect('filter-sector', '예산분야', filters.budget_sectors);
+        html += Components.filterSelect('filter-dept', '부처', filters.departments);
+        html += '<div class="range-filter">';
+        html += '<label>최소 유사도:</label>';
+        html += '<input type="range" id="filter-min-score" min="5" max="10" step="0.5" value="' + (this._state.filters.minScore || 5) + '">';
+        html += '<span class="range-value" id="score-display">' + (this._state.filters.minScore || 5) + '</span>';
+        html += '</div>';
         html += '<button id="filter-reset" class="btn-secondary">초기화</button>';
         html += '</div>';
 
         html += '<div id="summary-bar" class="summary-bar"></div>';
-        html += '<div id="program-table-container"></div>';
+        html += '<div id="pair-table-container"></div>';
 
         el.innerHTML = html;
 
-        // Restore filter state
-        var fm = document.getElementById('filter-ministry');
-        var fd = document.getElementById('filter-domain');
-        var fs = document.getElementById('filter-sector');
-        if (fm && this._state.filters.ministry) fm.value = this._state.filters.ministry;
-        if (fd && this._state.filters.domain_tag) fd.value = this._state.filters.domain_tag;
-        if (fs && this._state.filters.budget_sector) fs.value = this._state.filters.budget_sector;
+        if (this._state.filters.department) {
+            document.getElementById('filter-dept').value = this._state.filters.department;
+        }
 
-        this._refreshProgramTable();
-        this._bindProgramListEvents();
+        this._refreshPairTable();
+        this._bindPairListEvents();
     },
 
-    _refreshProgramTable: function() {
-        var programs = DataStore.getPrograms(this._state.filters, this._state.search, this._state.sort);
-        var totalBudget = DataStore.getTotalBudget(programs);
-        var allPrograms = DataStore.getPrograms();
+    _refreshPairTable: function() {
+        var pairs = DataStore.getPairs(this._state.filters, this._state.search, this._state.sort);
+        var allPairs = DataStore.getPairs();
 
         var summaryEl = document.getElementById('summary-bar');
         if (summaryEl) {
+            var totalBudget = 0;
+            for (var i = 0; i < pairs.length; i++) {
+                totalBudget += (pairs[i].project_a.budget_2026 || 0) + (pairs[i].project_b.budget_2026 || 0);
+            }
             summaryEl.innerHTML =
-                '<span class="summary-item">전체 <strong>' + allPrograms.length + '</strong>개 사업</span>' +
-                '<span class="summary-item">필터 결과 <strong>' + programs.length + '</strong>개</span>' +
-                '<span class="summary-item">총 예산 <strong>' + Utils.formatBudget(totalBudget) + '</strong></span>';
+                '<span class="summary-item">전체 <strong>' + allPairs.length + '</strong>쌍</span>' +
+                '<span class="summary-item">필터 결과 <strong>' + pairs.length + '</strong>쌍</span>' +
+                '<span class="summary-item">관련 예산 합계 <strong>' + Utils.formatBudget(totalBudget) + '</strong></span>';
         }
 
-        var tableEl = document.getElementById('program-table-container');
+        var tableEl = document.getElementById('pair-table-container');
         if (tableEl) {
-            tableEl.innerHTML = Components.programTable(programs, this._state.sort);
+            tableEl.innerHTML = Components.pairTable(pairs, this._state.sort);
         }
 
-        // Bind table row clicks
-        var rows = document.querySelectorAll('#program-table-container tr[data-program-id]');
-        for (var i = 0; i < rows.length; i++) {
-            rows[i].addEventListener('click', function(e) {
-                var id = this.getAttribute('data-program-id');
-                if (id) location.hash = '#/program/' + id;
+        // Bind row clicks
+        var rows = document.querySelectorAll('#pair-table-container tr[data-pair-id]');
+        for (var j = 0; j < rows.length; j++) {
+            rows[j].addEventListener('click', function() {
+                var id = this.getAttribute('data-pair-id');
+                if (id) location.hash = '#/pair/' + id;
             });
         }
 
-        // Bind sort header clicks
-        var headers = document.querySelectorAll('#program-table-container th[data-sort-field]');
+        // Bind sort headers
+        var headers = document.querySelectorAll('#pair-table-container th[data-sort-field]');
         var self = this;
-        for (var j = 0; j < headers.length; j++) {
-            headers[j].addEventListener('click', function() {
+        for (var k = 0; k < headers.length; k++) {
+            headers[k].addEventListener('click', function() {
                 var field = this.getAttribute('data-sort-field');
-                if (field === 'target_groups') return;
                 if (self._state.sort.field === field) {
                     self._state.sort.dir = self._state.sort.dir === 'asc' ? 'desc' : 'asc';
                 } else {
                     self._state.sort.field = field;
-                    self._state.sort.dir = field === 'program_name' || field === 'ministry' ? 'asc' : 'desc';
+                    self._state.sort.dir = field === 'similarity_score' || field === 'budget_sum' ? 'desc' : 'asc';
                 }
-                self._refreshProgramTable();
+                self._refreshPairTable();
             });
         }
     },
 
-    _bindProgramListEvents: function() {
+    _bindPairListEvents: function() {
         var self = this;
         var searchInput = document.getElementById('search-input');
         if (searchInput) {
             searchInput.addEventListener('input', Utils.debounce(function() {
                 self._state.search = searchInput.value.trim();
-                self._refreshProgramTable();
+                self._refreshPairTable();
             }, 300));
         }
 
-        var filterIds = [
-            { id: 'filter-ministry', key: 'ministry' },
-            { id: 'filter-domain', key: 'domain_tag' },
-            { id: 'filter-sector', key: 'budget_sector' }
-        ];
-        for (var i = 0; i < filterIds.length; i++) {
-            (function(fid) {
-                var el = document.getElementById(fid.id);
-                if (el) {
-                    el.addEventListener('change', function() {
-                        self._state.filters[fid.key] = el.value;
-                        self._refreshProgramTable();
-                    });
-                }
-            })(filterIds[i]);
+        var deptSelect = document.getElementById('filter-dept');
+        if (deptSelect) {
+            deptSelect.addEventListener('change', function() {
+                self._state.filters.department = deptSelect.value;
+                self._refreshPairTable();
+            });
+        }
+
+        var slider = document.getElementById('filter-min-score');
+        var display = document.getElementById('score-display');
+        if (slider) {
+            slider.addEventListener('input', function() {
+                var val = parseFloat(slider.value);
+                if (display) display.textContent = val;
+                self._state.filters.minScore = val;
+                self._refreshPairTable();
+            });
         }
 
         var resetBtn = document.getElementById('filter-reset');
         if (resetBtn) {
             resetBtn.addEventListener('click', function() {
                 self._state.search = '';
-                self._state.filters = { ministry: '', domain_tag: '', budget_sector: '' };
+                self._state.filters = { department: '', minScore: 5 };
                 var si = document.getElementById('search-input');
                 if (si) si.value = '';
-                var selects = document.querySelectorAll('.filter-row select');
-                for (var s = 0; s < selects.length; s++) selects[s].value = '';
-                self._refreshProgramTable();
+                if (deptSelect) deptSelect.value = '';
+                if (slider) { slider.value = 5; if (display) display.textContent = '5'; }
+                self._refreshPairTable();
             });
         }
     },
 
-    // ========== Program Detail View ==========
-    renderProgramDetail: function(programId) {
+    // ========== Pair Detail (유사도 쌍 상세) ==========
+    renderPairDetail: function(pairId) {
         var el = this.container();
-        var p = DataStore.getProgram(programId);
+        var p = DataStore.getPair(pairId);
 
         if (!p) {
-            el.innerHTML = '<div class="error-state"><h2>사업을 찾을 수 없습니다</h2><p>ID: ' + Utils.escapeHtml(programId) + '</p><p><a href="#/programs">&larr; 사업 목록으로 돌아가기</a></p></div>';
+            el.innerHTML = '<div class="error-state"><h2>유사 사업 쌍을 찾을 수 없습니다</h2><p><a href="#/pairs">&larr; 목록으로 돌아가기</a></p></div>';
             return;
         }
 
-        var overlaps = DataStore.getOverlapsForProgram(programId);
-        var html = '';
-
-        html += '<a href="#/programs" class="back-link">&larr; 사업 목록으로</a>';
-
-        // Header
-        html += '<div class="card">';
-        html += '<div class="card-header"><h1>' + Utils.escapeHtml(p.program_name) + '</h1></div>';
-        html += '<div class="info-grid">';
-        html += '<div class="info-item"><span class="info-label">사업코드</span><span class="info-value">' + Utils.escapeHtml(p.program_code) + '</span></div>';
-        html += '<div class="info-item"><span class="info-label">소관부처</span><span class="info-value">' + Utils.escapeHtml(p.ministry) + '</span></div>';
-        html += '<div class="info-item"><span class="info-label">담당부서</span><span class="info-value">' + Utils.escapeHtml(p.department) + '</span></div>';
-        html += '<div class="info-item"><span class="info-label">재원</span><span class="info-value">' + Utils.escapeHtml(p.fund_source) + '</span></div>';
-        html += '<div class="info-item"><span class="info-label">지원형태</span><span class="info-value">' + Utils.escapeHtml(p.support_type) + '</span></div>';
-        html += '<div class="info-item"><span class="info-label">사업상태</span><span class="info-value">' + Utils.escapeHtml(p.program_status) + '</span></div>';
-        html += '<div class="info-item"><span class="info-label">시작연도</span><span class="info-value">' + (p.start_year || '-') + '</span></div>';
-        html += '<div class="info-item"><span class="info-label">수행방식</span><span class="info-value">' + Utils.escapeHtml(p.delivery_method) + '</span></div>';
-        html += '</div>';
-        html += '</div>';
-
-        // Budget
-        html += '<div class="card">';
-        html += '<div class="card-header"><h2>예산 현황</h2></div>';
-        html += Components.budgetCard(p.budget_2026_million_won, p.budget_2025_million_won, p.budget_change_rate);
-        if (p.target_scale) {
-            html += '<div style="margin-top:var(--space-md);font-size:var(--font-size-sm);color:var(--text-secondary);">사업 규모: ' + Utils.escapeHtml(p.target_scale) + '</div>';
-        }
-        html += '</div>';
-
-        // Sub-programs
-        if (p.sub_programs && p.sub_programs.length > 0) {
-            html += '<div class="card">';
-            html += '<div class="card-header"><h2>내역사업 (' + p.sub_programs.length + '개)</h2></div>';
-            html += Components.subProgramTable(p.sub_programs);
-            html += '</div>';
-        }
-
-        // Executing agencies
-        html += '<div class="card">';
-        html += '<div class="collapsible-header" data-collapsible="agencies">';
-        html += '<h2>수행기관 (' + (p.executing_agencies || []).length + '개)</h2>';
-        html += '<span class="collapsible-arrow open">&#9654;</span>';
-        html += '</div>';
-        html += '<div class="collapsible-body open" id="collapsible-agencies">';
-        html += Components.agencyList(p.executing_agencies);
-        html += '</div>';
-        html += '</div>';
-
-        // Target groups
-        html += '<div class="card">';
-        html += '<div class="collapsible-header" data-collapsible="targets">';
-        html += '<h2>사업 대상</h2>';
-        html += '<span class="collapsible-arrow open">&#9654;</span>';
-        html += '</div>';
-        html += '<div class="collapsible-body open" id="collapsible-targets">';
-        html += '<ul class="simple-list">';
-        for (var t = 0; t < (p.target_groups || []).length; t++) {
-            html += '<li>' + Utils.escapeHtml(p.target_groups[t]) + '</li>';
-        }
-        html += '</ul>';
-        html += '</div>';
-        html += '</div>';
-
-        // Legal basis
-        if (p.legal_basis && p.legal_basis.length > 0) {
-            html += '<div class="card">';
-            html += '<div class="collapsible-header" data-collapsible="legal">';
-            html += '<h2>법적 근거</h2>';
-            html += '<span class="collapsible-arrow">&#9654;</span>';
-            html += '</div>';
-            html += '<div class="collapsible-body" id="collapsible-legal">';
-            html += '<ul class="simple-list">';
-            for (var l = 0; l < p.legal_basis.length; l++) {
-                html += '<li>' + Utils.escapeHtml(p.legal_basis[l]) + '</li>';
-            }
-            html += '</ul>';
-            html += '</div>';
-            html += '</div>';
-        }
-
-        // Tags
-        html += '<div class="card">';
-        html += '<div class="card-header"><h2>분류 태그</h2></div>';
-        html += '<div class="section"><h3 class="section-title" style="font-size:var(--font-size-sm);">도메인 태그</h3>';
-        html += Components.tagBadges(p.domain_tags, 'badge-domain');
-        html += '</div>';
-        html += '<div class="section"><h3 class="section-title" style="font-size:var(--font-size-sm);">키워드</h3>';
-        html += Components.tagBadges(p.keywords, 'badge-keyword');
-        html += '</div>';
-        html += '</div>';
-
-        // Overlap relations
-        html += '<div class="card">';
-        html += '<div class="card-header"><h2>중복 관계 (' + overlaps.length + '건)</h2></div>';
-        html += Components.overlapCardList(overlaps, programId);
-        html += '</div>';
-
-        // Contact
-        if (p.contact) {
-            html += '<div class="card">';
-            html += '<div class="card-header"><h2>연락처</h2></div>';
-            html += Components.contactCard(p.contact);
-            html += '</div>';
-        }
-
-        el.innerHTML = html;
-        this._bindDetailEvents();
-    },
-
-    _bindDetailEvents: function() {
-        // Collapsible sections
-        var headers = document.querySelectorAll('.collapsible-header');
-        for (var i = 0; i < headers.length; i++) {
-            headers[i].addEventListener('click', function() {
-                var key = this.getAttribute('data-collapsible');
-                var body = document.getElementById('collapsible-' + key);
-                var arrow = this.querySelector('.collapsible-arrow');
-                if (body) {
-                    body.classList.toggle('open');
-                    if (arrow) arrow.classList.toggle('open');
-                }
-            });
-        }
-
-        // Overlap card clicks
-        var cards = document.querySelectorAll('.overlap-card[data-overlap-id]');
-        for (var j = 0; j < cards.length; j++) {
-            cards[j].addEventListener('click', function() {
-                var id = this.getAttribute('data-overlap-id');
-                if (id) location.hash = '#/overlap/' + id;
-            });
-        }
-    },
-
-    // ========== Overlap List View ==========
-    renderOverlapList: function() {
-        var el = this.container();
-        var html = '<div class="view-header">';
-        html += '<h1>중복 분석</h1>';
-        html += '<p>사업 간 중복도를 종합점수 기준으로 분석합니다.</p>';
-        html += '</div>';
-
-        html += '<div class="filter-row">';
-        html += '<div class="range-filter">';
-        html += '<label>최소 중복점수:</label>';
-        html += '<input type="range" id="overlap-min-score" min="0" max="100" step="5" value="' + Math.round(this._state.overlapMinScore * 100) + '">';
-        html += '<span class="range-value" id="overlap-score-display">' + Math.round(this._state.overlapMinScore * 100) + '%</span>';
-        html += '</div>';
-        html += '</div>';
-
-        html += '<div id="overlap-table-container"></div>';
-
-        el.innerHTML = html;
-        this._refreshOverlapTable();
-        this._bindOverlapListEvents();
-    },
-
-    _refreshOverlapTable: function() {
-        var overlaps = DataStore.getOverlaps(this._state.overlapSort, this._state.overlapMinScore);
-        var tableEl = document.getElementById('overlap-table-container');
-        if (tableEl) {
-            tableEl.innerHTML = Components.overlapTable(overlaps, this._state.overlapSort);
-        }
-
-        // Bind row clicks
-        var rows = document.querySelectorAll('#overlap-table-container tr[data-overlap-id]');
-        for (var i = 0; i < rows.length; i++) {
-            rows[i].addEventListener('click', function() {
-                var id = this.getAttribute('data-overlap-id');
-                if (id) location.hash = '#/overlap/' + id;
-            });
-        }
-
-        // Bind sort headers
-        var headers = document.querySelectorAll('#overlap-table-container th[data-sort-field]');
-        var self = this;
-        for (var j = 0; j < headers.length; j++) {
-            headers[j].addEventListener('click', function() {
-                var field = this.getAttribute('data-sort-field');
-                if (self._state.overlapSort.field === field) {
-                    self._state.overlapSort.dir = self._state.overlapSort.dir === 'asc' ? 'desc' : 'asc';
-                } else {
-                    self._state.overlapSort.field = field;
-                    self._state.overlapSort.dir = field === 'overlap_score' ? 'desc' : 'asc';
-                }
-                self._refreshOverlapTable();
-            });
-        }
-    },
-
-    _bindOverlapListEvents: function() {
-        var self = this;
-        var slider = document.getElementById('overlap-min-score');
-        var display = document.getElementById('overlap-score-display');
-        if (slider) {
-            slider.addEventListener('input', function() {
-                var val = parseInt(slider.value);
-                if (display) display.textContent = val + '%';
-                self._state.overlapMinScore = val / 100;
-                self._refreshOverlapTable();
-            });
-        }
-    },
-
-    // ========== Overlap Detail View ==========
-    renderOverlapDetail: function(overlapId) {
-        var el = this.container();
-        var o = DataStore.getOverlap(overlapId);
-
-        if (!o) {
-            el.innerHTML = '<div class="error-state"><h2>중복분석을 찾을 수 없습니다</h2><p>ID: ' + Utils.escapeHtml(overlapId) + '</p><p><a href="#/overlaps">&larr; 중복분석 목록으로 돌아가기</a></p></div>';
-            return;
-        }
-
-        var pA = DataStore.getProgram(o.program_a);
-        var pB = DataStore.getProgram(o.program_b);
-
-        var html = '<a href="#/overlaps" class="back-link">&larr; 중복분석 목록으로</a>';
+        var html = '<a href="#/pairs" class="back-link">&larr; 유사 사업 쌍 목록으로</a>';
 
         // Header
         html += '<div class="card">';
         html += '<div class="card-header">';
-        html += '<h1>중복 분석 상세</h1>';
-        html += '<p style="margin-top:var(--space-xs);">';
-        html += '<span class="badge badge-overlap">' + Utils.escapeHtml(o.overlap_type) + '</span>';
-        html += ' 종합 중복도: ' + Components.scoreBar(o.overlap_score);
-        html += '</p>';
-        html += '</div>';
-        html += '</div>';
+        html += '<h1>유사도 분석 상세</h1>';
+        html += '<div style="display:flex;align-items:center;gap:var(--space-md);margin-top:var(--space-sm);flex-wrap:wrap;">';
+        html += '<span class="badge badge-overlap">' + Utils.escapeHtml(p.similarity_level) + '</span>';
+        html += '<span>종합 유사도:</span>';
+        html += '<div style="min-width:120px;">' + Components.scoreBar(p.similarity_score) + '</div>';
+        html += '</div></div></div>';
 
-        // Program pair
+        // Two project cards side by side
         html += '<div class="program-pair">';
-        html += Components.programSummaryCard(pA);
-        html += Components.programSummaryCard(pB);
+        html += Components.projectCard(p.project_a);
+        html += Components.projectCard(p.project_b);
         html += '</div>';
 
-        // Dimension breakdown
+        // Analysis breakdown
         html += '<div class="card">';
-        html += '<div class="card-header"><h2>차원별 중복도 분석</h2></div>';
-        html += Components.dimensionBreakdown(o.overlap_dimensions);
+        html += '<div class="card-header"><h2>분석 세부 점수</h2></div>';
+        html += Components.analysisBreakdown(p.analysis);
         html += '</div>';
 
-        // Coordination needed
-        if (o.coordination_needed) {
-            html += '<div class="coordination-card">';
-            html += '<h4>조율 필요사항</h4>';
-            html += '<p>' + Utils.escapeHtml(o.coordination_needed) + '</p>';
-            html += '</div>';
-        }
-
-        // Coordination contacts
-        html += Components.coordinationContacts(o.coordination_contacts);
-
-        // Links to programs
+        // Rationale
         html += '<div class="card">';
-        html += '<div class="card-header"><h2>사업 상세 보기</h2></div>';
-        html += '<div style="display:flex;gap:var(--space-md);flex-wrap:wrap;">';
-        if (pA) html += '<a href="#/program/' + pA.program_id + '" style="flex:1;min-width:200px;" class="btn-secondary" style="text-align:center;display:block;padding:12px;">' + Utils.escapeHtml(pA.program_name) + ' &rarr;</a>';
-        if (pB) html += '<a href="#/program/' + pB.program_id + '" style="flex:1;min-width:200px;" class="btn-secondary" style="text-align:center;display:block;padding:12px;">' + Utils.escapeHtml(pB.program_name) + ' &rarr;</a>';
+        html += '<div class="card-header"><h2>분석 근거 (Rationale)</h2></div>';
+        html += '<p style="font-size:var(--font-size-sm);line-height:1.8;">' + Utils.escapeHtml(p.rationale) + '</p>';
         html += '</div>';
+
+        // Recommendation
+        html += '<div class="coordination-card">';
+        html += '<h4>조정 권고사항 (Recommendation)</h4>';
+        html += '<p>' + Utils.escapeHtml(p.recommendation) + '</p>';
         html += '</div>';
 
         el.innerHTML = html;
     },
 
-    // ========== About View ==========
-    renderAbout: function() {
+    // ========== Clusters (사업군) ==========
+    renderClusters: function() {
         var el = this.container();
-        var meta = DataStore.getMeta();
-        var taxonomy = DataStore.getTaxonomy();
+        var clusters = DataStore.getClusters();
 
         var html = '<div class="view-header">';
-        html += '<h1>데이터 정보</h1>';
-        html += '<p>본 데이터셋의 구조와 분류 체계를 설명합니다.</p>';
+        html += '<h1>유사 사업군 (클러스터)</h1>';
+        html += '<p>유사도가 높은 사업들이 모여 형성된 사업군입니다.</p>';
+        html += '</div>';
+
+        html += '<div class="overlap-list">';
+        for (var i = 0; i < clusters.length; i++) {
+            html += Components.clusterCard(clusters[i]);
+        }
+        if (clusters.length === 0) {
+            html += '<div class="empty-state"><p>클러스터가 없습니다.</p></div>';
+        }
+        html += '</div>';
+
+        el.innerHTML = html;
+
+        // Bind clicks
+        var cards = document.querySelectorAll('.overlap-card[data-cluster-id]');
+        for (var j = 0; j < cards.length; j++) {
+            cards[j].addEventListener('click', function() {
+                var id = this.getAttribute('data-cluster-id');
+                if (id) location.hash = '#/cluster/' + id;
+            });
+        }
+    },
+
+    // ========== Cluster Detail ==========
+    renderClusterDetail: function(clusterId) {
+        var el = this.container();
+        var c = DataStore.getCluster(clusterId);
+
+        if (!c) {
+            el.innerHTML = '<div class="error-state"><h2>클러스터를 찾을 수 없습니다</h2><p><a href="#/clusters">&larr; 목록으로 돌아가기</a></p></div>';
+            return;
+        }
+
+        var html = '<a href="#/clusters" class="back-link">&larr; 사업군 목록으로</a>';
+
+        // Header
+        html += '<div class="card">';
+        html += '<div class="card-header"><h1>' + Utils.escapeHtml(c.cluster_name) + '</h1></div>';
+        html += '<div class="info-grid">';
+        html += '<div class="info-item"><span class="info-label">유형</span><span class="info-value">' + Utils.escapeHtml(c.cluster_type) + '</span></div>';
+        html += '<div class="info-item"><span class="info-label">세부사업 수</span><span class="info-value">' + c.member_count + '개</span></div>';
+        html += '<div class="info-item"><span class="info-label">총 예산</span><span class="info-value">' + Utils.formatBudget(c.total_budget_2026) + '</span></div>';
+        html += '<div class="info-item"><span class="info-label">유사도 범위</span><span class="info-value">' + Utils.formatScore(c.score_stats.min) + ' ~ ' + Utils.formatScore(c.score_stats.max) + ' (평균 ' + Utils.formatScore(c.score_stats.avg) + ')</span></div>';
+        html += '</div>';
+        html += '<div style="margin-top:var(--space-md);">';
+        for (var d = 0; d < (c.departments || []).length; d++) {
+            html += '<span class="badge badge-ministry">' + Utils.escapeHtml(c.departments[d]) + '</span> ';
+        }
+        html += '</div></div>';
+
+        // Members
+        html += '<div class="card">';
+        html += '<div class="card-header"><h2>소속 세부사업 (' + c.member_count + '개)</h2></div>';
+        html += '<table class="sub-table"><thead><tr>';
+        html += '<th>세부사업명</th><th>사업명</th><th>부처</th><th class="text-right">예산</th><th class="col-hide-tablet">유형</th>';
+        html += '</tr></thead><tbody>';
+        for (var m = 0; m < (c.members || []).length; m++) {
+            var mem = c.members[m];
+            html += '<tr>';
+            html += '<td><strong>' + Utils.escapeHtml(mem.sub_project_name) + '</strong></td>';
+            html += '<td>' + Utils.escapeHtml(mem.project_name) + '</td>';
+            html += '<td><span class="badge badge-ministry">' + Utils.escapeHtml(mem.department) + '</span></td>';
+            html += '<td class="text-right">' + Utils.formatBudgetDetail(mem.budget_2026) + '</td>';
+            html += '<td class="col-hide-tablet">' + Utils.escapeHtml(mem.type || '') + '</td>';
+            html += '</tr>';
+        }
+        html += '</tbody></table></div>';
+
+        // Internal pairs
+        if (c.internal_pairs && c.internal_pairs.length > 0) {
+            html += '<div class="card">';
+            html += '<div class="card-header"><h2>내부 유사 쌍 (' + c.internal_pairs.length + '건)</h2></div>';
+            html += '<div class="overlap-list">';
+            for (var ip = 0; ip < c.internal_pairs.length; ip++) {
+                var pair = c.internal_pairs[ip];
+                html += '<div class="overlap-card" data-pair-id="' + Utils.escapeHtml(pair.pair_id) + '">';
+                html += '<div class="overlap-card-info">';
+                html += '<div class="overlap-card-name">' + Utils.escapeHtml(pair.project_a.sub_project_name) + ' &harr; ' + Utils.escapeHtml(pair.project_b.sub_project_name) + '</div>';
+                html += '<div class="overlap-card-type">' + Utils.escapeHtml(pair.project_a.department) + ' / ' + Utils.escapeHtml(pair.project_b.department) + '</div>';
+                html += '</div>';
+                html += '<div class="overlap-card-score">' + Components.scoreBar(pair.similarity_score) + '</div>';
+                html += '</div>';
+            }
+            html += '</div></div>';
+
+            // Bind pair clicks
+            setTimeout(function() {
+                var pairCards = document.querySelectorAll('.overlap-card[data-pair-id]');
+                for (var x = 0; x < pairCards.length; x++) {
+                    pairCards[x].addEventListener('click', function() {
+                        var id = this.getAttribute('data-pair-id');
+                        if (id) location.hash = '#/pair/' + id;
+                    });
+                }
+            }, 0);
+        }
+
+        // Summary
+        if (c.summary) {
+            html += '<div class="card">';
+            html += '<div class="card-header"><h2>요약</h2></div>';
+            html += '<p style="font-size:var(--font-size-sm);line-height:1.8;">' + Utils.escapeHtml(c.summary) + '</p>';
+            html += '</div>';
+        }
+
+        // Recommendation
+        if (c.recommendation) {
+            html += '<div class="coordination-card">';
+            html += '<h4>조정 권고사항</h4>';
+            html += '<p>' + Utils.escapeHtml(c.recommendation) + '</p>';
+            html += '</div>';
+        }
+
+        el.innerHTML = html;
+    },
+
+    // ========== Statistics (통계) ==========
+    renderStats: function() {
+        var el = this.container();
+        var stats = DataStore.getSummaryStats();
+        var meta = DataStore.getMeta();
+
+        var html = '<div class="view-header">';
+        html += '<h1>분석 통계</h1>';
+        html += '<p>' + Utils.escapeHtml(meta.title || '') + '</p>';
         html += '</div>';
 
         html += '<div class="about-grid">';
 
         // Meta info
         html += '<div class="card">';
-        html += '<div class="card-header"><h2>데이터셋 정보</h2></div>';
+        html += '<div class="card-header"><h2>분석 개요</h2></div>';
         html += '<div class="info-grid" style="grid-template-columns:1fr;">';
-        html += '<div class="info-item"><span class="info-label">버전</span><span class="info-value">' + Utils.escapeHtml(meta.version) + '</span></div>';
-        html += '<div class="info-item"><span class="info-label">생성일</span><span class="info-value">' + Utils.escapeHtml(meta.generated_date) + '</span></div>';
-        html += '<div class="info-item"><span class="info-label">총 사업 수</span><span class="info-value">' + (meta.total_programs || '-') + '개</span></div>';
-        html += '<div class="info-item"><span class="info-label">설명</span><span class="info-value">' + Utils.escapeHtml(meta.description) + '</span></div>';
-        if (meta.note) {
-            html += '<div class="info-item"><span class="info-label">비고</span><span class="info-value">' + Utils.escapeHtml(meta.note) + '</span></div>';
+        html += '<div class="info-item"><span class="info-label">버전</span><span class="info-value">' + Utils.escapeHtml(String(meta.version)) + '</span></div>';
+        html += '<div class="info-item"><span class="info-label">생성일</span><span class="info-value">' + Utils.escapeHtml(meta.generated_at || '') + '</span></div>';
+        html += '<div class="info-item"><span class="info-label">분석 사업 수</span><span class="info-value">' + (meta.total_projects_analyzed || 0) + '개 사업 / ' + (meta.total_sub_projects_analyzed || 0) + '개 세부사업</span></div>';
+        html += '<div class="info-item"><span class="info-label">발견된 유사 쌍</span><span class="info-value">' + (meta.total_pairs_found || 0) + '건</span></div>';
+        html += '<div class="info-item"><span class="info-label">클러스터</span><span class="info-value">' + (meta.total_clusters_found || 0) + '개</span></div>';
+        html += '</div></div>';
+
+        // Score range distribution
+        if (stats.by_score_range) {
+            var sr = stats.by_score_range;
+            var scoreItems = [
+                { label: '9~10점 (매우 높음)', value: sr['9_10'] || 0 },
+                { label: '7~8점 (높음)', value: sr['7_8'] || 0 },
+                { label: '5~6점 (중간)', value: sr['5_6'] || 0 }
+            ];
+            html += Components.statsCard('유사도 점수 분포', scoreItems, '점수 범위', '쌍 수');
         }
-        html += '</div>';
-        html += '</div>';
-
-        // Domain tags
-        html += '<div class="card">';
-        html += '<div class="card-header"><h2>도메인 분류 태그</h2></div>';
-        html += Components.tagBadges(taxonomy.domain_tags || [], 'badge-domain');
-        html += '</div>';
-
-        // Overlap types
-        html += '<div class="card">';
-        html += '<div class="card-header"><h2>중복 유형</h2></div>';
-        html += Components.tagBadges(taxonomy.overlap_types || [], 'badge-overlap');
-        html += '</div>';
-
-        // Overlap dimensions
-        html += '<div class="card">';
-        html += '<div class="card-header"><h2>중복 분석 차원</h2></div>';
-        var dimLabels = {
-            target_group: '대상 중복 - 수혜자 집단이 겹치는 정도',
-            content: '내용 중복 - 교육/훈련/지원 내용의 유사도',
-            executing_agency: '수행기관 중복 - 시행주체·참여기관의 동일성',
-            region: '지역 중복 - 사업 수행 지역의 겹침 정도'
-        };
-        html += '<ul class="simple-list">';
-        var dims = taxonomy.overlap_dimensions || [];
-        for (var d = 0; d < dims.length; d++) {
-            html += '<li><strong>' + Utils.escapeHtml(dims[d]) + '</strong>';
-            if (dimLabels[dims[d]]) html += ' &mdash; ' + Utils.escapeHtml(dimLabels[dims[d]]);
-            html += '</li>';
-        }
-        html += '</ul>';
-        html += '</div>';
 
         html += '</div>'; // end about-grid
+
+        // By department pair
+        if (stats.by_department_pair && stats.by_department_pair.length > 0) {
+            var deptItems = stats.by_department_pair.map(function(d) {
+                return {
+                    label: d.dept_a + ' \u2194 ' + d.dept_b,
+                    value: d.pair_count + '쌍',
+                    extra: '평균 ' + d.avg_score.toFixed(1) + '점'
+                };
+            });
+            html += Components.statsCard('부처 간 유사 쌍 현황', deptItems, '부처 조합', '유사 쌍 수', '평균 유사도');
+        }
+
+        // By domain
+        if (stats.by_domain && stats.by_domain.length > 0) {
+            var domItems = stats.by_domain.map(function(d) {
+                return {
+                    label: d.domain,
+                    value: d.pair_count + '쌍',
+                    extra: Utils.formatBudget(d.total_budget)
+                };
+            });
+            html += Components.statsCard('도메인별 유사 쌍 현황', domItems, '도메인', '유사 쌍 수', '관련 예산');
+        }
 
         // Methodology
         html += '<div class="card" style="margin-top:var(--space-md);">';
         html += '<div class="card-header"><h2>분석 방법론</h2></div>';
-        html += '<p style="font-size:var(--font-size-sm);line-height:1.8;">본 데이터는 정부 예산사업 간의 중복도를 4가지 차원(대상, 내용, 수행기관, 지역)에서 분석한 결과입니다. ';
-        html += '각 차원별로 0~1 사이의 점수를 산출하며, 종합 점수는 차원별 점수의 가중 평균으로 계산됩니다. ';
-        html += '점수가 높을수록 두 사업 간의 중복도가 높음을 의미합니다.</p>';
-        html += '<div style="margin-top:var(--space-md);">';
-        html += '<p style="font-size:var(--font-size-sm);"><strong>점수 해석 기준:</strong></p>';
-        html += '<ul class="simple-list">';
-        html += '<li><span class="score-cell low" style="margin-right:8px;">0% ~ 30%</span> 낮은 중복도</li>';
-        html += '<li><span class="score-cell mid" style="margin-right:8px;">30% ~ 60%</span> 중간 중복도</li>';
-        html += '<li><span class="score-cell high" style="margin-right:8px;">60% ~ 100%</span> 높은 중복도</li>';
-        html += '</ul>';
-        html += '</div>';
+        html += '<p style="font-size:var(--font-size-sm);line-height:1.8;">' + Utils.escapeHtml(meta.methodology || '') + '</p>';
+        if (meta.formula) {
+            html += '<div style="margin-top:var(--space-md);padding:var(--space-md);background:var(--bg-gray);border-radius:var(--radius-sm);font-family:monospace;font-size:var(--font-size-sm);">';
+            html += Utils.escapeHtml(meta.formula);
+            html += '</div>';
+        }
         html += '</div>';
 
         el.innerHTML = html;

@@ -1,41 +1,53 @@
-const Utils = {
-    formatBudget(millionWon) {
+var Utils = {
+    formatBudget: function(millionWon) {
         if (millionWon === null || millionWon === undefined) return '-';
-        const eok = millionWon / 100;
-        return eok.toLocaleString('ko-KR', { maximumFractionDigits: 0 }) + '억원';
+        var eok = millionWon / 100;
+        if (eok >= 1) return eok.toLocaleString('ko-KR', { maximumFractionDigits: 0 }) + '억원';
+        return millionWon.toLocaleString('ko-KR') + '백만원';
     },
 
-    formatBudgetDetail(millionWon) {
+    formatBudgetDetail: function(millionWon) {
         if (millionWon === null || millionWon === undefined) return '-';
         return millionWon.toLocaleString('ko-KR') + '백만원';
     },
 
-    formatChangeRate(rate) {
-        if (rate === null || rate === undefined) return '-';
-        const sign = rate > 0 ? '+' : '';
-        const cls = rate > 0 ? 'change-up' : rate < 0 ? 'change-down' : 'change-flat';
-        const arrow = rate > 0 ? '\u25B2' : rate < 0 ? '\u25BC' : '';
-        return '<span class="' + cls + '">' + arrow + ' ' + sign + rate + '%</span>';
+    formatScore: function(score) {
+        if (score === null || score === undefined) return '-';
+        return score.toFixed(1);
     },
 
-    formatScore(score) {
+    formatScorePercent: function(score) {
         if (score === null || score === undefined) return '-';
         return (score * 100).toFixed(0) + '%';
     },
 
-    getScoreColor(score) {
-        if (score >= 0.6) return 'var(--score-high)';
-        if (score >= 0.3) return 'var(--score-mid)';
+    // Score 5~10 scale
+    getScoreColor: function(score) {
+        if (score >= 8) return 'var(--score-high)';
+        if (score >= 6) return 'var(--score-mid)';
         return 'var(--score-low)';
     },
 
-    getScoreClass(score) {
-        if (score >= 0.6) return 'high';
-        if (score >= 0.3) return 'mid';
+    getScoreClass: function(score) {
+        if (score >= 8) return 'high';
+        if (score >= 6) return 'mid';
         return 'low';
     },
 
-    debounce(fn, ms) {
+    // Sub-score 0~1 scale
+    getSubScoreColor: function(score) {
+        if (score >= 0.7) return 'var(--score-high)';
+        if (score >= 0.4) return 'var(--score-mid)';
+        return 'var(--score-low)';
+    },
+
+    getSubScoreClass: function(score) {
+        if (score >= 0.7) return 'high';
+        if (score >= 0.4) return 'mid';
+        return 'low';
+    },
+
+    debounce: function(fn, ms) {
         if (ms === undefined) ms = 300;
         var timer;
         return function() {
@@ -46,14 +58,14 @@ const Utils = {
         };
     },
 
-    escapeHtml(str) {
+    escapeHtml: function(str) {
         if (!str) return '';
         var div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
     },
 
-    truncate(str, len) {
+    truncate: function(str, len) {
         if (!str) return '';
         if (str.length <= len) return str;
         return str.substring(0, len) + '...';
