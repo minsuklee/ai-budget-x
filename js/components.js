@@ -80,10 +80,10 @@ var Components = {
         html += '<div class="info-item"><span class="info-label">부처</span><span class="info-value">' + Utils.escapeHtml(proj.department) + '</span></div>';
         if (proj.division) html += '<div class="info-item"><span class="info-label">실/국</span><span class="info-value">' + Utils.escapeHtml(proj.division) + '</span></div>';
         html += '<div class="info-item"><span class="info-label">2026 예산</span><span class="info-value">' + Utils.formatBudgetDetail(proj.budget_2026) + '</span></div>';
-        if (proj.type) html += '<div class="info-item"><span class="info-label">유형</span><span class="info-value">' + Utils.escapeHtml(proj.type) + '</span></div>';
-        if (proj.primary_domain) html += '<div class="info-item"><span class="info-label">도메인</span><span class="info-value">' + Utils.escapeHtml(proj.primary_domain) + '</span></div>';
+        if (proj.type) html += '<div class="info-item"><span class="info-label">유형</span><span class="info-value">' + Utils.codedValue(proj.type) + '</span></div>';
+        if (proj.primary_domain) html += '<div class="info-item"><span class="info-label">도메인</span><span class="info-value">' + Utils.codedValue(proj.primary_domain) + '</span></div>';
         if (proj.target_fields && proj.target_fields.length > 0) {
-            html += '<div class="info-item"><span class="info-label">대상분야</span><span class="info-value">' + proj.target_fields.map(function(f){ return Utils.escapeHtml(f); }).join(', ') + '</span></div>';
+            html += '<div class="info-item"><span class="info-label">대상분야</span><span class="info-value">' + proj.target_fields.map(function(f){ return Utils.codedValue(f); }).join(', ') + '</span></div>';
         }
         html += '</div>';
         html += '</div>';
@@ -97,7 +97,7 @@ var Components = {
         // Target Field Similarity
         if (analysis.target_field_similarity) {
             html += '<div class="dimension-row">';
-            html += '<div class="dimension-header"><span class="dimension-label">교육분야 유사도 (F)</span>';
+            html += '<div class="dimension-header"><span class="dimension-label">교육분야 유사도</span>';
             html += '<div class="dimension-bar">' + Components.subScoreBar(analysis.target_field_similarity.score) + '</div></div>';
             html += '</div>';
         }
@@ -105,7 +105,7 @@ var Components = {
         // Beneficiary Similarity
         if (analysis.beneficiary_similarity) {
             html += '<div class="dimension-row">';
-            html += '<div class="dimension-header"><span class="dimension-label">수혜대상 유사도 (C)</span>';
+            html += '<div class="dimension-header"><span class="dimension-label">수혜대상 유사도</span>';
             html += '<div class="dimension-bar">' + Components.subScoreBar(analysis.beneficiary_similarity.score) + '</div></div>';
             html += '</div>';
         }
@@ -113,7 +113,7 @@ var Components = {
         // Agency Similarity
         if (analysis.agency_similarity) {
             html += '<div class="dimension-row">';
-            html += '<div class="dimension-header"><span class="dimension-label">수행기관 유사도 (D)</span>';
+            html += '<div class="dimension-header"><span class="dimension-label">수행기관 유사도</span>';
             html += '<div class="dimension-bar">' + Components.subScoreBar(analysis.agency_similarity.score) + '</div></div>';
             html += '</div>';
         }
@@ -121,7 +121,7 @@ var Components = {
         // Text Similarity
         if (analysis.text_similarity) {
             html += '<div class="dimension-row">';
-            html += '<div class="dimension-header"><span class="dimension-label">텍스트 유사도 (E)</span>';
+            html += '<div class="dimension-header"><span class="dimension-label">텍스트 유사도</span>';
             html += '<div class="dimension-bar">' + Components.subScoreBar(analysis.text_similarity.score) + '</div></div>';
             if (analysis.text_similarity.domain_tfidf !== undefined) {
                 html += '<div class="dimension-detail">도메인 TF-IDF: ' + (analysis.text_similarity.domain_tfidf * 100).toFixed(0) + '% | 교육구조 TF-IDF: ' + (analysis.text_similarity.structure_tfidf * 100).toFixed(0) + '%</div>';

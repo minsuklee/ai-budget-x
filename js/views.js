@@ -255,7 +255,7 @@ var Views = {
             html += '<td>' + Utils.escapeHtml(mem.project_name) + '</td>';
             html += '<td><span class="badge badge-ministry">' + Utils.escapeHtml(mem.department) + '</span></td>';
             html += '<td class="text-right">' + Utils.formatBudgetDetail(mem.budget_2026) + '</td>';
-            html += '<td class="col-hide-tablet">' + Utils.escapeHtml(mem.type || '') + '</td>';
+            html += '<td class="col-hide-tablet">' + Utils.codedValue(mem.type || '') + '</td>';
             html += '</tr>';
         }
         html += '</tbody></table></div>';
